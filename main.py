@@ -3,16 +3,17 @@ import tensorflow as tf
 import numpy as np
 import re
 
-# TensorFlow Model Prediction
 def model_prediction(test_image):
-    model = tf.keras.models.load_model("trained_plant_disease_model.keras")
+    model1 = tf.keras.models.load_model("trained_plant_disease_model.keras")
+    model2 = tf.keras.models.load_model("trained_plant_disease_model_plantvillage.keras")
     image = tf.keras.preprocessing.image.load_img(test_image, target_size=(128, 128))
     input_arr = tf.keras.preprocessing.image.img_to_array(image)
     input_arr = np.array([input_arr])  # batch dimension
-    predictions = model.predict(input_arr)
+    prediction = model1.predict(input_arr)
+    predictions = model2.predict(input_arr)
+    predictions=prediction+predictions
     return np.argmax(predictions)
 
-# Clean class name
 def clean_class_name(name):
     parts = name.split("___")
     if len(parts) == 2:
@@ -21,11 +22,10 @@ def clean_class_name(name):
         return f"{main}: {sub}"
     return name.replace("_", " ").strip()
 
-# Title and Intro
 st.title("🌿 Plant Disease Recognition System")
 st.image("home_page.jpeg", use_column_width=True)
 st.markdown("""
-Upload a plant image, and the system will detect possible diseases using a trained deep learning model.
+Upload a plant image, and the system will detect possible diseases using a trained deep learning model1.
 
 ---
 
@@ -76,7 +76,21 @@ with col2:
             'Tomato___Early_blight', 'Tomato___Late_blight', 'Tomato___Leaf_Mold', 
             'Tomato___Septoria_leaf_spot', 'Tomato___Spider_mites Two-spotted_spider_mite', 
             'Tomato___Target_Spot', 'Tomato___Tomato_Yellow_Leaf_Curl_Virus', 'Tomato___Tomato_mosaic_virus',
-            'Tomato___healthy'
+            'Tomato___healthy','Pepper__bell___Bacterial_spot',
+ 'Pepper__bell___healthy',
+ 'Potato___Early_blight',
+ 'Potato___Late_blight',
+ 'Potato___healthy',
+ 'Tomato_Bacterial_spot',
+ 'Tomato_Early_blight',
+ 'Tomato_Late_blight',
+ 'Tomato_Leaf_Mold',
+ 'Tomato_Septoria_leaf_spot',
+ 'Tomato_Spider_mites_Two_spotted_spider_mite',
+ 'Tomato__Target_Spot',
+ 'Tomato__Tomato_YellowLeaf__Curl_Virus',
+ 'Tomato__Tomato_mosaic_virus',
+ 'Tomato_healthy'
         ]
 
         cleaned_class_names = [clean_class_name(name) for name in raw_class_names]

@@ -1,5 +1,6 @@
 test/
 train/
 valid/
+plantvillage/
 
 train_model.ipynb
