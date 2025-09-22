@@ -1,8 +1,31 @@
 import streamlit as st
 import tensorflow as tf
 import numpy as np
-import re
 from pathlib import Path
+
+# ---- PAGE CONFIG ----
+st.set_page_config(page_title="Plant Disease Detection", layout="wide")
+
+# ---- CUSTOM CSS FOR GLASSMORPHISM ----
+st.markdown("""
+<style>
+body {
+    background: linear-gradient(to right, #e8f5e9, #f1f8e9);
+}
+.reportview-container .main .block-container{
+    padding-top: 2rem;
+}
+.glass-box {
+    background: rgba(255, 255, 255, 0.25);
+    border-radius: 20px;
+    padding: 2rem;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+</style>
+""", unsafe_allow_html=True)
 
 # ---- LOAD TFLITE MODEL ----
 @st.cache_resource
@@ -16,32 +39,21 @@ def load_tflite_interpreter(model_path="trained_plant_disease_model_plantvillage
 interpreter, input_details, output_details = load_tflite_interpreter()
 
 def model_prediction(test_image):
-    # Load first keras model
     model1 = tf.keras.models.load_model("trained_plant_disease_model.keras")
-
-    # Preprocess input
     image = tf.keras.preprocessing.image.load_img(test_image, target_size=(128, 128))
     input_arr = tf.keras.preprocessing.image.img_to_array(image)
     input_arr = np.array([input_arr], dtype=np.float32)
-
-    # Prediction from model1 (Keras)
     prediction1 = model1.predict(input_arr)
-
-    # Prediction from model2 (TFLite)
     interpreter.set_tensor(input_details[0]['index'], input_arr)
     interpreter.invoke()
     prediction2 = interpreter.get_tensor(output_details[0]['index'])
-
-    # Combine predictions
     combined_predictions = prediction1 + prediction2
     return np.argmax(combined_predictions)
 
 def clean_class_name(name):
     parts = name.split("___")
     if len(parts) == 2:
-        main = parts[0].replace("_", " ").strip()
-        sub = parts[1].replace("_", " ").strip()
-        return f"{main}: {sub}"
+        return f"{parts[0].replace('_',' ').strip()}: {parts[1].replace('_',' ').strip()}"
     return name.replace("_", " ").strip()
 
 raw_class_names = [
@@ -79,52 +91,50 @@ for plant, diseases in plant_groups.items():
         for disease in diseases:
             st.sidebar.write(f"- {disease}")
 
-st.sidebar.markdown("---")
-st.sidebar.subheader("🖼 Try Sample Images")
-sample_images_path = Path("sample_images")
-if sample_images_path.exists():
-    sample_files = list(sample_images_path.glob("*.jpg")) + list(sample_images_path.glob("*.png"))
-    selected_sample = st.sidebar.selectbox(
-        "Choose a sample image:",
-        ["None"] + [file.name for file in sample_files]
-    )
-    if selected_sample != "None":
-        test_image = sample_images_path / selected_sample
-        st.sidebar.image(str(test_image), caption="Sample Image", use_column_width=True)
-else:
-    st.sidebar.info("No sample images found. Add images to `sample_images/` folder.")
-
-# ---- MAIN PAGE ----
-st.title("🌿 Plant Disease Recognition System")
-st.image("home_page.jpeg", use_column_width=True)
-st.markdown("""
-Upload a plant image, and the system will detect possible diseases using a trained deep learning model.
-
----
-
-### How It Works
-1. **Upload Image** below.
-2. **Model Processes** the image.
-3. **Result** is displayed with the disease name.
-
----
-""")
-
-st.subheader("🔍 Disease Recognition")
+# ---- MAIN FUNCTIONALITY (TOP) ----
+st.markdown("<div class='glass-box'>", unsafe_allow_html=True)
+st.subheader("🔍 Upload Image & Predict Disease")
 col1, col2 = st.columns(2)
 
 with col1:
-    uploaded_image = st.file_uploader("Choose an image:", type=["jpg", "jpeg", "png"])
+    uploaded_image = st.file_uploader("Upload plant leaf image:", type=["jpg", "jpeg", "png"])
     if uploaded_image:
-        st.image(uploaded_image, caption="Uploaded Image", use_column_width=True)
+        st.image(uploaded_image, caption="Preview", use_column_width=True)
+
+# Sample images from folder
+sample_images_path = Path("sample_images")
+if sample_images_path.exists():
+    sample_files = list(sample_images_path.glob("*.jpg")) + list(sample_images_path.glob("*.png"))
+    selected_sample = st.selectbox("Or choose a sample image:", ["None"] + [file.name for file in sample_files])
+    if selected_sample != "None":
+        test_image = sample_images_path / selected_sample
+        st.image(str(test_image), caption="Sample Image", use_column_width=True)
+else:
+    st.info("No sample images found. Add some to `sample_images/` folder.")
 
 final_image = uploaded_image if uploaded_image else (test_image if 'test_image' in locals() else None)
 
 with col2:
-    if final_image and st.button("Predict"):
+    if final_image and st.button("Predict", use_container_width=True):
         st.snow()
         result_index = model_prediction(final_image)
         disease_name = cleaned_class_names[result_index]
         st.success(f"🌱 Predicted Disease: **{disease_name}**")
     elif not final_image:
-        st.info("Please upload or select an image to predict.")
+        st.info("Upload or select an image to predict.")
+
+st.markdown("</div>", unsafe_allow_html=True)
+
+# ---- PROJECT INFO (BOTTOM) ----
+with st.expander("ℹ️ About This Project"):
+    st.markdown("""
+    This project uses **Deep Learning (CNNs)** to classify plant diseases from leaf images.
+    The model is trained on the **PlantVillage dataset** and deployed using **Streamlit**.
+    
+    **How it works:**
+    - Upload a plant image.
+    - Model processes it using a TensorFlow + TFLite hybrid pipeline.
+    - Displays predicted disease name with confidence.
+    
+    This helps farmers & researchers quickly identify plant diseases for better crop management.
+    """)
