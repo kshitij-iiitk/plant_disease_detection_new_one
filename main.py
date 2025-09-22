@@ -7,45 +7,31 @@ import pandas as pd
 # ---- PAGE CONFIG ----
 st.set_page_config(page_title="Plant Disease Detection", layout="wide")
 
-# ---- CUSTOM CSS FOR GLASSMORPHISM ----
+# ---- GLASSMORPHISM CSS ----
 st.markdown("""
 <style>
-body {
-    background: linear-gradient(to right, #e8f5e9, #f1f8e9);
-}
-.reportview-container .main .block-container{
-    padding-top: 2rem;
-}
+body { background: linear-gradient(to right, #e8f5e9, #f1f8e9); }
+.reportview-container .main .block-container{ padding-top: 2rem; }
 .glass-box {
     background: rgba(255, 255, 255, 0.25);
     border-radius: 20px;
     padding: 2rem;
-    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 30px rgba(0,0,0,0.1);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    border: 1px solid rgba(255,255,255,0.3);
 }
 </style>
 """, unsafe_allow_html=True)
 
-# ---- LOAD TFLITE MODELS ----
+# ---- LOAD KERAS MODELS ----
 @st.cache_resource
-def load_tflite_interpreter(model_path):
-    interpreter = tf.lite.Interpreter(model_path=str(model_path))
-    interpreter.allocate_tensors()
-    input_details = interpreter.get_input_details()
-    output_details = interpreter.get_output_details()
-    return interpreter, input_details, output_details
+def load_models():
+    model1 = tf.keras.models.load_model("trained_plant_disease_model_plantvillage.keras")
+    model2 = tf.keras.models.load_model("trained_plant_disease_model.keras")
+    return model1, model2
 
-interpreter1, input_details1, output_details1 = load_tflite_interpreter("trained_plant_disease_model_plantvillage.tflite")
-interpreter2, input_details2, output_details2 = load_tflite_interpreter("trained_plant_disease_model.tflite")
-
-# ---- LOAD KERAS MODEL ----
-@st.cache_resource
-def load_keras_model(model_path="trained_plant_disease_model.keras"):
-    return tf.keras.models.load_model(model_path)
-
-keras_model = load_keras_model()
+model1, model2 = load_models()
 
 # ---- CLASS NAMES ----
 raw_class_names = [
@@ -76,45 +62,38 @@ def clean_class_name(name):
         return f"{parts[0].replace('_',' ').strip()}: {parts[1].replace('_',' ').strip()}"
     return name.replace("_", " ").strip()
 
-cleaned_class_names = [clean_class_name(c) for c in raw_class_names]
+class_names = [clean_class_name(c) for c in raw_class_names]
 
 # ---- PREDICTION FUNCTION ----
-def model_prediction(test_image):
-    image = tf.keras.preprocessing.image.load_img(test_image, target_size=(128, 128))
-    input_arr = tf.keras.preprocessing.image.img_to_array(image)
-    input_arr = np.array([input_arr], dtype=np.float32)
-    
-    # Keras model prediction
-    pred1 = keras_model.predict(input_arr)
-    
-    # TFLite model predictions
-    interpreter1.set_tensor(input_details1[0]['index'], input_arr)
-    interpreter1.invoke()
-    pred2_1 = interpreter1.get_tensor(output_details1[0]['index'])
-    
-    interpreter2.set_tensor(input_details2[0]['index'], input_arr)
-    interpreter2.invoke()
-    pred2_2 = interpreter2.get_tensor(output_details2[0]['index'])
-    
-    # Ensure same shape
-    min_len = min(pred1.shape[1], pred2_1.shape[1], pred2_2.shape[1])
-    combined = pred1[0, :min_len] + pred2_1[0, :min_len] + pred2_2[0, :min_len]
-    
-    return np.argmax(combined), combined
+def predict_image(image_path):
+    image = tf.keras.preprocessing.image.load_img(image_path, target_size=(128, 128))
+    arr = tf.keras.preprocessing.image.img_to_array(image)
+    arr = np.expand_dims(arr, axis=0)  # batch dimension
+    arr = arr.astype(np.float32)
+
+    pred1 = model1.predict(arr)[0]
+    pred2 = model2.predict(arr)[0]
+
+    # Trim to smallest shape to combine
+    min_len = min(len(pred1), len(pred2))
+    combined = pred1[:min_len] + pred2[:min_len]
+
+    predicted_idx = np.argmax(combined)
+    return predicted_idx, combined
 
 # ---- SIDEBAR ----
 st.sidebar.title("🌱 Supported Plants")
-plant_groups = {}
-for name in cleaned_class_names:
+plants = {}
+for name in class_names:
     plant = name.split(":")[0] if ":" in name else name
-    plant_groups.setdefault(plant, []).append(name)
+    plants.setdefault(plant, []).append(name)
 
-for plant, diseases in plant_groups.items():
+for plant, diseases in plants.items():
     with st.sidebar.expander(plant):
         for disease in diseases:
             st.sidebar.write(f"- {disease}")
 
-# ---- MAIN FUNCTIONALITY ----
+# ---- MAIN UI ----
 st.markdown("<div class='glass-box'>", unsafe_allow_html=True)
 st.subheader("🔍 Upload Image & Predict Disease")
 col1, col2 = st.columns([1,1.2])
@@ -125,12 +104,10 @@ with col1:
         st.image(uploaded_image, caption="Preview", use_column_width=True)
 
 # Sample images
-sample_images_path = Path(__file__).parent / "sample_images"
+sample_images_path = Path("sample_images")
 sample_files = []
 if sample_images_path.exists():
-    sample_files = list(sample_images_path.glob("*.jpg")) + list(sample_images_path.glob("*.jpeg")) + \
-                   list(sample_images_path.glob("*.png")) + list(sample_images_path.glob("*.JPG")) + \
-                   list(sample_images_path.glob("*.JPEG")) + list(sample_images_path.glob("*.PNG"))
+    sample_files = list(sample_images_path.glob("*.[jJ][pP][gG]")) + list(sample_images_path.glob("*.[pP][nN][gG]"))
 
 if sample_files:
     selected_sample = st.selectbox("Or choose a sample image:", ["None"] + [f.name for f in sample_files])
@@ -143,33 +120,30 @@ final_image = uploaded_image if uploaded_image else (test_image if 'test_image' 
 with col2:
     if final_image and st.button("Predict", use_container_width=True):
         st.snow()
-        result_index, probabilities = model_prediction(final_image)
-        disease_name = cleaned_class_names[result_index]
-        st.success(f"🌱 Predicted Disease: **{disease_name}**")
-        
-        # Display probabilities as a horizontal bar chart
-        df = pd.DataFrame({
-            "Disease": cleaned_class_names[:len(probabilities)],
-            "Probability": probabilities
-        })
-        st.subheader("Prediction Probabilities")
-        st.bar_chart(df.set_index("Disease"))
+        idx, probs = predict_image(final_image)
+        st.success(f"🌱 Predicted Disease: **{class_names[idx]}**")
 
+        # Top 5 probabilities
+        top_idx = np.argsort(probs)[-5:][::-1]
+        top_classes = [class_names[i] for i in top_idx]
+        top_probs = [probs[i] for i in top_idx]
+        df = pd.DataFrame({"Disease": top_classes, "Probability": top_probs})
+        st.subheader("Top 5 Predictions")
+        st.bar_chart(df.set_index("Disease"))
     elif not final_image:
         st.info("Upload or select an image to predict.")
-
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ---- PROJECT INFO ----
 with st.expander("ℹ️ About This Project"):
     st.markdown("""
-    This project uses **Deep Learning (CNNs)** to classify plant diseases from leaf images.
-    The model is trained on the **PlantVillage dataset** and deployed using **Streamlit**.
-    
-    **How it works:**
-    - Upload a plant image.
-    - Model processes it using TensorFlow + TFLite hybrid pipeline.
-    - Displays predicted disease name with confidence.
-    
-    This helps farmers & researchers quickly identify plant diseases for better crop management.
-    """)
+This project uses **Deep Learning (CNNs)** to classify plant diseases from leaf images.
+The model is trained on the **PlantVillage dataset** and deployed using **Streamlit**.
+
+**How it works:**
+- Upload a plant image.
+- Model processes it using two Keras models.
+- Displays predicted disease and top 5 predictions.
+
+This helps farmers & researchers quickly identify plant diseases.
+""")
