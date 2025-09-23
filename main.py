@@ -1,10 +1,8 @@
 import streamlit as st
-import torch
-import torchvision.transforms as transforms
+import tensorflow as tf
 import numpy as np
 from pathlib import Path
 import pandas as pd
-from PIL import Image
 
 # ---- PAGE CONFIG ----
 st.set_page_config(page_title="Plant Disease Detection", layout="wide")
@@ -12,12 +10,8 @@ st.set_page_config(page_title="Plant Disease Detection", layout="wide")
 # ---- GLASSMORPHISM CSS ----
 st.markdown("""
 <style>
-body {
-    background: linear-gradient(to right, #e8f5e9, #f1f8e9);
-}
-.reportview-container .main .block-container{
-    padding-top: 2rem;
-}
+body { background: linear-gradient(to right, #e8f5e9, #f1f8e9); }
+.reportview-container .main .block-container{ padding-top: 2rem; }
 .glass-box {
     background: rgba(255, 255, 255, 0.25);
     border-radius: 20px;
@@ -30,42 +24,36 @@ body {
 </style>
 """, unsafe_allow_html=True)
 
-# ---- LOAD PYTORCH MODEL ----
+# ---- LOAD KERAS MODELS ----
 @st.cache_resource
-def load_model():
-    model = torch.load("plant_disease_model.pt", map_location=torch.device("cpu"))
-    model.eval()
-    return model
+def load_models():
+    model1 = tf.keras.models.load_model("trained_plant_disease_model_plantvillage.keras")
+    model2 = tf.keras.models.load_model("trained_plant_disease_model.keras")
+    return model1, model2
 
-model = load_model()
+model1, model2 = load_models()
 
 # ---- CLASS NAMES ----
 raw_class_names = [
-    'Apple___Apple_scab',
-    'Apple___Black_rot',
-    'Apple___Cedar_apple_rust',
-    'Apple___healthy',
-    'Blueberry___healthy',
-    'Cherry_(including_sour)___Powdery_mildew',
-    'Cherry_(including_sour)___healthy',
-    'Corn_(maize)___Cercospora_leaf_spot Gray_leaf_spot',
-    'Corn_(maize)___Common_rust_',
-    'Corn_(maize)___Northern_Leaf_Blight',
-    'Corn_(maize)___healthy',
-    'Grape___Black_rot',
-    'Grape___Esca_(Black_Measles)',
-    'Grape___Leaf_blight_(Isariopsis_Leaf_Spot)',
-    'Grape___healthy',
-    'Orange___Haunglongbing_(Citrus_greening)',
-    'Peach___Bacterial_spot',
-    'Peach___healthy',
-    'Pepper,_bell___Bacterial_spot',
-    'Pepper,_bell___healthy',
-    'Raspberry___healthy',
-    'Soybean___healthy',
-    'Squash___Powdery_mildew',
-    'Strawberry___Leaf_scorch',
-    'Strawberry___healthy'
+    'Apple___Apple_scab', 'Apple___Black_rot', 'Apple___Cedar_apple_rust', 'Apple___healthy',
+    'Blueberry___healthy', 'Cherry_(including_sour)___Powdery_mildew',
+    'Cherry_(including_sour)___healthy', 'Corn_(maize)___Cercospora_leaf_spot Gray_leaf_spot',
+    'Corn_(maize)___Common_rust_', 'Corn_(maize)___Northern_Leaf_Blight', 'Corn_(maize)___healthy',
+    'Grape___Black_rot', 'Grape___Esca_(Black_Measles)', 'Grape___Leaf_blight_(Isariopsis_Leaf_Spot)',
+    'Grape___healthy', 'Orange___Haunglongbing_(Citrus_greening)', 'Peach___Bacterial_spot',
+    'Peach___healthy', 'Pepper,_bell___Bacterial_spot', 'Pepper,_bell___healthy',
+    'Potato___Early_blight', 'Potato___Late_blight', 'Potato___healthy',
+    'Raspberry___healthy', 'Soybean___healthy', 'Squash___Powdery_mildew',
+    'Strawberry___Leaf_scorch', 'Strawberry___healthy', 'Tomato___Bacterial_spot',
+    'Tomato___Early_blight', 'Tomato___Late_blight', 'Tomato___Leaf_Mold',
+    'Tomato___Septoria_leaf_spot', 'Tomato___Spider_mites Two-spotted_spider_mite',
+    'Tomato___Target_Spot', 'Tomato___Tomato_Yellow_Leaf_Curl_Virus', 'Tomato___Tomato_mosaic_virus',
+    'Tomato___healthy','Pepper__bell___Bacterial_spot', 'Pepper__bell___healthy',
+    'Potato___Early_blight', 'Potato___Late_blight', 'Potato___healthy',
+    'Tomato_Bacterial_spot', 'Tomato_Early_blight', 'Tomato_Late_blight', 'Tomato_Leaf_Mold',
+    'Tomato_Septoria_leaf_spot', 'Tomato_Spider_mites_Two_spotted_spider_mite',
+    'Tomato__Target_Spot', 'Tomato__Tomato_YellowLeaf__Curl_Virus', 'Tomato__Tomato_mosaic_virus',
+    'Tomato_healthy'
 ]
 
 def clean_class_name(name):
@@ -78,33 +66,20 @@ class_names = [clean_class_name(c) for c in raw_class_names]
 
 # ---- PREDICTION FUNCTION ----
 def predict_image(image_path):
-    transform = transforms.Compose([
-        transforms.Resize((128, 128)),
-        transforms.ToTensor()
-    ])
-    
-    image = Image.open(image_path).convert("RGB")
-    img_tensor = transform(image).unsqueeze(0)  # Add batch dimension
+    image = tf.keras.preprocessing.image.load_img(image_path, target_size=(128, 128))
+    arr = tf.keras.preprocessing.image.img_to_array(image)
+    arr = np.expand_dims(arr, axis=0)  # batch dimension
+    arr = arr.astype(np.float32)
 
-    with torch.no_grad():
-        output = model(img_tensor)
-        probs = torch.nn.functional.softmax(output[0], dim=0)
+    pred1 = model1.predict(arr)[0]
+    pred2 = model2.predict(arr)[0]
 
-    predicted_idx = torch.argmax(probs).item()
-    return predicted_idx, probs.numpy()
+    # Trim to smallest shape to combine
+    min_len = min(len(pred1), len(pred2))
+    combined = pred1[:min_len] + pred2[:min_len]
 
-# ---- BASIC LEAF CHECK ----
-def check_if_leaf(image_path):
-    img = Image.open(image_path).convert("RGB").resize((64, 64))
-    img_np = np.array(img)
-    green_channel = img_np[:, :, 1]  # take green channel
-    variance = np.var(green_channel)
-    avg_green = np.mean(green_channel)
-
-    # Heuristic: low variance + low green intensity → suspicious
-    if variance < 200 and avg_green < 80:
-        return False
-    return True
+    predicted_idx = np.argmax(combined)
+    return predicted_idx, combined
 
 # ---- SIDEBAR ----
 st.sidebar.title("🌱 Supported Plants")
@@ -121,7 +96,7 @@ for plant, diseases in plants.items():
 # ---- MAIN UI ----
 st.markdown("<div class='glass-box'>", unsafe_allow_html=True)
 st.subheader("🔍 Upload Image & Predict Disease")
-col1, col2 = st.columns([1, 1.2])
+col1, col2 = st.columns([1,1.2])
 
 with col1:
     uploaded_image = st.file_uploader("Upload plant leaf image:", type=["jpg", "jpeg", "png"])
@@ -144,10 +119,6 @@ final_image = uploaded_image if uploaded_image else (test_image if 'test_image' 
 
 with col2:
     if final_image and st.button("Predict", use_container_width=True):
-        # Warn if image likely not a leaf
-        if not check_if_leaf(final_image):
-            st.warning("⚠️ This image might not be a plant leaf. Prediction may be inaccurate.")
-
         st.snow()
         idx, probs = predict_image(final_image)
         st.success(f"🌱 Predicted Disease: **{class_names[idx]}**")
@@ -161,19 +132,18 @@ with col2:
         st.bar_chart(df.set_index("Disease"))
     elif not final_image:
         st.info("Upload or select an image to predict.")
-
 st.markdown("</div>", unsafe_allow_html=True)
 
 # ---- PROJECT INFO ----
 with st.expander("ℹ️ About This Project"):
     st.markdown("""
-    This project uses **Deep Learning (CNNs)** to classify plant diseases from leaf images.
-    The model is trained on a **custom dataset** and deployed using **Streamlit**.
+This project uses **Deep Learning (CNNs)** to classify plant diseases from leaf images.
+The model is trained on the **PlantVillage dataset** and deployed using **Streamlit**.
 
-    **How it works:**
-    - Upload a plant image.
-    - Model processes it using a PyTorch model.
-    - Displays predicted disease and top 5 predictions.
+**How it works:**
+- Upload a plant image.
+- Model processes it using two Keras models.
+- Displays predicted disease and top 5 predictions.
 
-    This helps farmers & researchers quickly identify plant diseases.
-    """)
+This helps farmers & researchers quickly identify plant diseases.
+""")
