@@ -33,7 +33,7 @@ body {
 # ---- LOAD PYTORCH MODEL ----
 @st.cache_resource
 def load_model():
-    model = torch.load("plant_disease_model_1_latest.pt", map_location=torch.device("cpu"))
+    model = torch.load("plant_disease_model.pt", map_location=torch.device("cpu"))
     model.eval()
     return model
 
