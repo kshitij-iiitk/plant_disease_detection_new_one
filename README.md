@@ -12,6 +12,8 @@ The application predicts diseases from plant leaf images and displays the most p
 
 The models are trained using the PlantVillage dataset and combined for improved prediction performance.
 
+Live demo available at: https://plant-disease-detection-krp.streamlit.app
+
 ---
 
 ## Features
@@ -166,45 +168,21 @@ Predictions from both models are combined to improve classification accuracy.
 
 ### Home Page
 
-```text
-Add screenshot here:
-screenshots/home_page.png
-```
-
-![Home Page](screenshots/home_page.png)
+![Home Page](screenshots\Homepage.png)
 
 ---
 
 ### Disease Prediction
 
-```text
-Add screenshot here:
-screenshots/prediction.png
-```
-
-![Prediction](screenshots/prediction.png)
+![Prediction](screenshots\Prediction.png)
 
 ---
 
-### Top 5 Predictions Chart
+### Confusion Matrix
 
-```text
-Add screenshot here:
-screenshots/top5_predictions.png
-```
 
-![Top 5 Predictions](screenshots/top5_predictions.png)
+![Confusion Matrix](screenshots/confusion_matrix.png)
 
----
-
-### Sidebar Supported Plants
-
-```text
-Add screenshot here:
-screenshots/sidebar.png
-```
-
-![Sidebar](screenshots/sidebar.png)
 
 ---
 
